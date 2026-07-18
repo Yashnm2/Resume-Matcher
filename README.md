@@ -1,3 +1,14 @@
+---
+title: Resume Matcher
+emoji: 📄
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 3000
+pinned: false
+license: apache-2.0
+---
+
 <div align="center">
 
 [![Resume Matcher](assets/header.png)](https://www.resumematcher.fyi)
@@ -125,6 +136,21 @@ You can follow me on:
 **Master Resume**: Create a comprehensive master resume to draw from your existing one.
 
 ![Job Description Input](assets/step_2.png)
+
+### Daily 20 Job Scout
+
+Run Resume Matcher as a private, headless application-pack service. It discovers
+public jobs from ATS boards, configured career pages, manual links, and forwarded
+LinkedIn/Indeed alerts; ranks them against a search profile; and prepares up to 20
+review-ready packs per day. Each pack keeps the original posting beside a
+provenance-checked résumé, cover letter, referral draft, interview prep, and safe
+application answers. It never submits an application or sends a message.
+
+The Swiss-style workspace lives at `/scout`. Source health, contacts imported from
+LinkedIn's official Connections CSV, candidate facts, reserve jobs, live workflow
+events, and retry/cost history have dedicated views. See
+[the Job Scout operations guide](docs/agent/features/job-scout.md) and
+[Railway deployment guide](deploy/RAILWAY.md).
 
 ### Resume Builder
 

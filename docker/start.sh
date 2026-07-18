@@ -10,8 +10,10 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
-# Internal port configuration for single-port deployment.
-FRONTEND_PORT="3000"
+# Internal port configuration for single-port deployment. Railway and similar
+# platforms inject the public port at runtime, so the frontend must bind to it.
+# The API stays private inside the container and is reached through Next.js.
+FRONTEND_PORT="${PORT:-3000}"
 BACKEND_PORT="8000"
 
 # Print banner

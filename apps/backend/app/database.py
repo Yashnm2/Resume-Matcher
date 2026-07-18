@@ -58,9 +58,11 @@ class Database:
     # storage-level backstop).
     _master_resume_lock = asyncio.Lock()
 
-    def __init__(self, db_path: Path | None = None):
+    def __init__(self, db_path: Path | None = None, database_url: str | None = None):
         self.db_path = db_path or settings.sqlite_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.database_target: Path | str = database_url or settings.database_url or self.db_path
+        if isinstance(self.database_target, Path):
+            self.database_target.parent.mkdir(parents=True, exist_ok=True)
         self._async_engine = None
         self._async_session_factory: async_sessionmaker[AsyncSession] | None = None
         self._sync_engine = None
@@ -78,10 +80,10 @@ class Database:
         """
         if self._initialized:
             return
-        self._sync_engine = make_sync_engine(self.db_path)
+        self._sync_engine = make_sync_engine(self.database_target)
         self._sync_session_factory = sessionmaker(self._sync_engine, expire_on_commit=False)
         init_models_sync(self._sync_engine)
-        self._async_engine = make_async_engine(self.db_path)
+        self._async_engine = make_async_engine(self.database_target)
         self._async_session_factory = async_sessionmaker(
             self._async_engine, expire_on_commit=False
         )
@@ -92,6 +94,11 @@ class Database:
         self._ensure_initialized()
         assert self._async_session_factory is not None
         return self._async_session_factory
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Public async session factory for feature repositories."""
+        return self._session
 
     @property
     def _sync(self) -> sessionmaker[Session]:
@@ -193,6 +200,7 @@ class Database:
         title: str | None = None,
         original_markdown: str | None = None,
         interview_prep: str | None = None,
+        user_id: str = "local-user",
     ) -> dict[str, Any]:
         """Create a new resume entry.
 
@@ -204,6 +212,7 @@ class Database:
             session.add(
                 Resume(
                     resume_id=resume_id,
+                    user_id=user_id,
                     content=content,
                     content_type=content_type,
                     filename=filename,
@@ -297,11 +306,11 @@ class Database:
             row = await session.get(Resume, resume_id)
             return self._resume_to_dict(row) if row else None
 
-    async def get_master_resume(self) -> dict[str, Any] | None:
+    async def get_master_resume(self, user_id: str = "local-user") -> dict[str, Any] | None:
         """Get the master resume if exists."""
         async with self._session() as session:
             result = await session.execute(
-                select(Resume).where(Resume.is_master.is_(True))
+                select(Resume).where(Resume.user_id == user_id, Resume.is_master.is_(True))
             )
             row = result.scalars().first()
             return self._resume_to_dict(row) if row else None
@@ -367,13 +376,18 @@ class Database:
 
     # -- Job operations -----------------------------------------------------
 
-    async def create_job(self, content: str, resume_id: str | None = None) -> dict[str, Any]:
+    async def create_job(
+        self, content: str, resume_id: str | None = None, user_id: str = "local-user"
+    ) -> dict[str, Any]:
         """Create a new job description entry."""
         job_id = str(uuid4())
         now = _now()
         async with self._session() as session:
             session.add(
-                Job(job_id=job_id, content=content, resume_id=resume_id, created_at=now, metadata_json={})
+                Job(
+                    job_id=job_id, user_id=user_id, content=content,
+                    resume_id=resume_id, created_at=now, metadata_json={},
+                )
             )
             await session.commit()
         return {
@@ -432,6 +446,7 @@ class Database:
         tailored_resume_id: str,
         job_id: str,
         improvements: list[dict[str, Any]],
+        user_id: str = "local-user",
     ) -> dict[str, Any]:
         """Create an improvement result entry."""
         request_id = str(uuid4())
@@ -440,6 +455,7 @@ class Database:
             session.add(
                 Improvement(
                     request_id=request_id,
+                    user_id=user_id,
                     original_resume_id=original_resume_id,
                     tailored_resume_id=tailored_resume_id,
                     job_id=job_id,

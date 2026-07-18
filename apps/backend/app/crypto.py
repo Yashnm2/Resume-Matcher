@@ -69,6 +69,13 @@ def _load_fernet() -> Fernet:
     """Load (or generate) the Fernet instance, cached per secret path."""
     global _fernet, _loaded_from
     path = _secret_path()
+    if settings.encryption_secret:
+        marker = Path("<deployment-secret>")
+        if _fernet is not None and _loaded_from == marker:
+            return _fernet
+        _fernet = Fernet(settings.encryption_secret.encode("utf-8"))
+        _loaded_from = marker
+        return _fernet
     if _fernet is not None and _loaded_from == path:
         return _fernet
 

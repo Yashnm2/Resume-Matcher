@@ -19,6 +19,14 @@ dependencies = [
     "playwright==1.58.0",
     "python-docx==1.2.0",
     "python-dotenv==1.2.2",
+    "httpx==0.28.1",
+    "celery[redis]==5.6.2",
+    "asyncpg==0.31.0",
+    "psycopg[binary]==3.3.2",
+    "PyJWT[crypto]==2.10.1",
+    "alembic==1.16.5",
+    "sentry-sdk[fastapi]>=2.0.0,<3",
+    "huggingface-hub>=0.36.0,<2",
 ]
 
 [project.scripts]

@@ -1,0 +1,31 @@
+FROM python:3.13-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEPLOYMENT_ENVIRONMENT=production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+    libasound2 libpango-1.0-0 libcairo2 libatspi2.0-0 libgtk-3-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/backend
+COPY apps/backend/pyproject.toml ./
+COPY apps/backend/app ./app
+COPY apps/backend/alembic ./alembic
+COPY apps/backend/alembic.ini ./alembic.ini
+RUN pip install .
+
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+RUN python -m playwright install chromium
+
+EXPOSE 10000
+HEALTHCHECK --interval=10s --timeout=10s --start-period=45s --retries=5 \
+    CMD curl -f "http://127.0.0.1:${PORT:-10000}/api/v1/health" || exit 1
+
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]

@@ -242,6 +242,31 @@ class Settings(BaseSettings):
     reload: bool = False
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "INFO"
     frontend_base_url: str = "http://localhost:3000"
+    database_url: str | None = None
+    redis_url: str = "redis://localhost:6379/0"
+    auth_required: bool = False
+    supabase_url: str | None = None
+    supabase_jwt_secret: str | None = None
+    supabase_jwt_audience: str = "authenticated"
+    supabase_service_role_key: str | None = None
+    supabase_storage_bucket: str = "application-packs"
+    inbound_email_secret: str | None = None
+    scout_timezone: str = "Asia/Singapore"
+    scout_user_id: str = "local-user"
+    notification_email: str | None = None
+    resend_api_key: str | None = None
+    notification_from_email: str = "Resume Matcher <notifications@resend.dev>"
+    public_app_url: str = "http://localhost:3000"
+    encryption_secret: str | None = None
+    sentry_dsn: str | None = None
+    deployment_environment: str = "development"
+    # Optional zero-cost persistence for Hugging Face Docker Spaces. A private
+    # dataset repository stores consistent SQLite snapshots because free Space
+    # disks are ephemeral.
+    hf_state_repo_id: str | None = None
+    hf_token: str | None = None
+    hf_state_filename: str = "resume_matcher.db"
+    hf_state_sync_seconds: int = 60
 
     # Hard timeout (seconds) for a single resume tailoring/improve request — the
     # backend wraps the improve flow in asyncio.wait_for(timeout=this). It MUST be
@@ -287,7 +312,9 @@ class Settings(BaseSettings):
         """Normalize application log level from environment values."""
         value = "INFO" if not v else str(v).strip().upper()
         if value not in ALLOWED_LOG_LEVELS:
-            raise ValueError(f"Invalid LOG_LEVEL: {value}. Allowed: {ALLOWED_LOG_LEVELS}")
+            raise ValueError(
+                f"Invalid LOG_LEVEL: {value}. Allowed: {ALLOWED_LOG_LEVELS}"
+            )
         return value
 
     # CORS Configuration

@@ -9,8 +9,14 @@ FROM node:22-bookworm AS frontend-builder
 # Build argument for API URL (allows customization at build time)
 # Default routes requests through Next.js rewrites on the same origin.
 ARG NEXT_PUBLIC_API_URL=/
+ARG NEXT_PUBLIC_SUPABASE_URL=
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+ARG BACKEND_ORIGIN=http://127.0.0.1:8000
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL} \
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY} \
+    BACKEND_ORIGIN=${BACKEND_ORIGIN}
 
 WORKDIR /app/frontend
 
@@ -73,6 +79,8 @@ COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 # ============================================
 COPY apps/backend/pyproject.toml /app/backend/
 COPY apps/backend/app /app/backend/app
+COPY apps/backend/alembic /app/backend/alembic
+COPY apps/backend/alembic.ini /app/backend/alembic.ini
 
 WORKDIR /app/backend
 
@@ -93,8 +101,9 @@ COPY --from=frontend-builder /app/frontend/public ./public
 # Startup Script
 # ============================================
 COPY docker/start.sh /app/start.sh
+COPY deploy /app/deploy
 # Convert CRLF to LF (fixes Windows line ending issues) and make executable
-RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
+RUN sed -i 's/\r$//' /app/start.sh /app/deploy/*.sh && chmod +x /app/start.sh /app/deploy/*.sh
 
 # ============================================
 # Data Directory & Volume

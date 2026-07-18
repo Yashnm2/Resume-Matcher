@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import threading
+from contextvars import ContextVar, Token
 from typing import Any, Literal
 
 import litellm
@@ -34,6 +35,44 @@ litellm.drop_params = True
 # for a given turn (e.g., tool-call turns missing the blocks). Defensive; no
 # current code path sends thinking, but future-proofs the Router.
 litellm.modify_params = True
+
+_usage_context: ContextVar[dict[str, Any] | None] = ContextVar(
+    "llm_usage_context", default=None
+)
+
+
+def begin_usage_tracking() -> Token:
+    """Start request-local LLM token and provider-cost accounting."""
+    return _usage_context.set(
+        {
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0,
+            "models": {},
+        }
+    )
+
+
+def finish_usage_tracking(token: Token) -> dict[str, Any]:
+    usage = dict(_usage_context.get() or {})
+    usage["cost_usd"] = round(float(usage.get("cost_usd", 0)), 6)
+    _usage_context.reset(token)
+    return usage
+
+
+def _record_usage(response: Any, model_name: str) -> None:
+    tracked = _usage_context.get()
+    if tracked is None:
+        return
+    usage = getattr(response, "usage", None)
+    hidden = getattr(response, "_hidden_params", {}) or {}
+    tracked["calls"] += 1
+    tracked["prompt_tokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+    tracked["completion_tokens"] += int(getattr(usage, "completion_tokens", 0) or 0)
+    tracked["cost_usd"] += float(hidden.get("response_cost") or 0)
+    tracked["models"][model_name] = tracked["models"].get(model_name, 0) + 1
+
 
 # LLM timeout configuration (seconds) - base values
 LLM_TIMEOUT_HEALTH_CHECK = 30
@@ -520,7 +559,9 @@ def get_router(config: LLMConfig | None = None) -> tuple[Router, LLMConfig]:
         if _router is None or _router_config_key != key:
             _router = _build_router(config)
             _router_config_key = key
-            logging.info("LiteLLM Router rebuilt for %s/%s", config.provider, config.model)
+            logging.info(
+                "LiteLLM Router rebuilt for %s/%s", config.provider, config.model
+            )
         router = _router
 
     return router, config
@@ -608,10 +649,9 @@ async def check_llm_health(
             )
             reasoning_text = None
             if primary_content:
-                reasoning_text = (
-                    _join_text_parts(_extract_text_parts(_safe_get(msg, "reasoning_content")))
-                    or _join_text_parts(_extract_text_parts(_safe_get(msg, "thinking")))
-                )
+                reasoning_text = _join_text_parts(
+                    _extract_text_parts(_safe_get(msg, "reasoning_content"))
+                ) or _join_text_parts(_extract_text_parts(_safe_get(msg, "thinking")))
             result["reasoning_content"] = (
                 _to_code_block(reasoning_text) if reasoning_text else None
             )
@@ -680,6 +720,7 @@ async def complete(
             kwargs["reasoning_effort"] = config.reasoning_effort
 
         response = await router.acompletion(**kwargs)
+        _record_usage(response, model_name)
 
         content = _extract_choice_text(response.choices[0])
         if not content:
@@ -692,8 +733,7 @@ async def complete(
         return content
     except Exception as e:
         # Log the actual error server-side for debugging
-        logging.error(f"LLM completion failed: {e}", extra={
-                      "model": model_name})
+        logging.error(f"LLM completion failed: {e}", extra={"model": model_name})
         raise ValueError(
             "LLM completion failed. Please check your API configuration and try again."
         ) from e
@@ -727,7 +767,9 @@ def _supports_json_mode(model_name: str) -> bool:
         # mode (the system prompt already instructs "respond with valid JSON
         # only"). This avoids sending response_format to models that may
         # reject it.
-        logging.debug("Model %s not in LiteLLM registry, skipping JSON mode", model_name)
+        logging.debug(
+            "Model %s not in LiteLLM registry, skipping JSON mode", model_name
+        )
         return False
 
 
@@ -759,7 +801,10 @@ def _is_response_format_unsupported(error: Exception) -> bool:
 
 FALLBACK_MAX_TOKENS = 4096
 
-def get_safe_max_tokens(model_name: str, requested: int = DEFAULT_JSON_MAX_TOKENS) -> int:
+
+def get_safe_max_tokens(
+    model_name: str, requested: int = DEFAULT_JSON_MAX_TOKENS
+) -> int:
     """Return a token count safe for the given model, clamped to its output limit.
 
     Queries LiteLLM's model registry for ``max_output_tokens`` and returns
@@ -920,7 +965,9 @@ def _supports_temperature(model_name: str, temperature: float | None = None) -> 
     return True
 
 
-def _get_retry_temperature(model_name: str, attempt: int, base_temp: float = 0.1) -> float | None:
+def _get_retry_temperature(
+    model_name: str, attempt: int, base_temp: float = 0.1
+) -> float | None:
     """LLM-002: Get temperature for retry attempt.
 
     Returns None if the model does not support temperature at all.
@@ -991,11 +1038,9 @@ def _extract_json(content: str, _depth: int = 0) -> str:
     """
     # JSON-010: Safety limits
     if _depth > MAX_JSON_EXTRACTION_RECURSION:
-        raise ValueError(
-            f"JSON extraction exceeded max recursion depth: {_depth}")
+        raise ValueError(f"JSON extraction exceeded max recursion depth: {_depth}")
     if len(content) > MAX_JSON_CONTENT_SIZE:
-        raise ValueError(
-            f"Content too large for JSON extraction: {len(content)} bytes")
+        raise ValueError(f"Content too large for JSON extraction: {len(content)} bytes")
 
     original = content
 
@@ -1124,13 +1169,13 @@ async def complete_json(
                 kwargs["response_format"] = {"type": "json_object"}
 
             response = await router.acompletion(**kwargs)
+            _record_usage(response, model_name)
             content = _extract_choice_text(response.choices[0])
 
             if not content:
                 raise ValueError("Empty response from LLM")
 
-            logging.debug(
-                f"LLM response (attempt {attempt + 1}): {content[:300]}")
+            logging.debug(f"LLM response (attempt {attempt + 1}): {content[:300]}")
 
             # Extract and parse JSON
             json_str = _extract_json(content)
@@ -1145,21 +1190,13 @@ async def complete_json(
                         retries + 1,
                     )
                     if schema_type == "resume":
-                        hint = (
-                            "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL sections. Do not truncate."
-                        )
+                        hint = "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL sections. Do not truncate."
                     elif schema_type == "enrichment":
-                        hint = (
-                            "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL keys: items_to_enrich, questions, analysis_summary. Do not truncate."
-                        )
+                        hint = "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL keys: items_to_enrich, questions, analysis_summary. Do not truncate."
                     elif schema_type == "interview_prep":
-                        hint = (
-                            "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL keys: role_fit_analysis, resume_questions, project_follow_ups, skill_gaps, talking_points. Do not truncate."
-                        )
+                        hint = "\n\nIMPORTANT: Output the COMPLETE JSON object with ALL keys: role_fit_analysis, resume_questions, project_follow_ups, skill_gaps, talking_points. Do not truncate."
                     else:
-                        hint = (
-                            "\n\nIMPORTANT: Output ONLY a valid JSON object. Start with { and end with }."
-                        )
+                        hint = "\n\nIMPORTANT: Output ONLY a valid JSON object. Start with { and end with }."
                     messages[-1]["content"] = prompt + hint
                     continue
                 logging.warning(
@@ -1177,7 +1214,8 @@ async def complete_json(
                 json_mode_failed = True
                 logging.warning(
                     "JSON mode failed for %s, falling back to prompt-only (attempt %d)",
-                    model_name, attempt + 1,
+                    model_name,
+                    attempt + 1,
                 )
             if attempt < retries:
                 messages[-1]["content"] = (
@@ -1185,8 +1223,7 @@ async def complete_json(
                     + "\n\nIMPORTANT: Output ONLY a valid JSON object. Start with { and end with }."
                 )
                 continue
-            raise ValueError(
-                f"Failed to parse JSON after {retries + 1} attempts: {e}")
+            raise ValueError(f"Failed to parse JSON after {retries + 1} attempts: {e}")
 
         except ValueError as e:
             # Content quality — empty response, JSON extraction failure

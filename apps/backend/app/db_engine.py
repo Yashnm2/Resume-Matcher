@@ -40,22 +40,50 @@ def _url(path: Path, *, driver: str) -> str:
     return f"sqlite+{driver}:///{path}" if driver else f"sqlite:///{path}"
 
 
-def make_async_engine(path: Path) -> AsyncEngine:
-    """Create the async engine (``aiosqlite``) for the document tables."""
-    engine = create_async_engine(_url(path, driver="aiosqlite"), future=True)
-    event.listen(engine.sync_engine, "connect", _apply_sqlite_pragmas)
+def _async_url(target: Path | str) -> str:
+    """Normalize a local path or PostgreSQL URL for SQLAlchemy async use."""
+    if isinstance(target, Path):
+        return _url(target, driver="aiosqlite")
+    value = target.replace("postgres://", "postgresql://", 1)
+    if value.startswith("sqlite://"):
+        return value.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return value
+
+
+def _sync_url(target: Path | str) -> str:
+    """Normalize a local path or PostgreSQL URL for SQLAlchemy sync use."""
+    if isinstance(target, Path):
+        return _url(target, driver="")
+    value = target.replace("postgres://", "postgresql://", 1)
+    if value.startswith("sqlite+aiosqlite://"):
+        return value.replace("sqlite+aiosqlite://", "sqlite://", 1)
+    if value.startswith("postgresql+asyncpg://"):
+        return value.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
+def make_async_engine(target: Path | str) -> AsyncEngine:
+    """Create an async SQLite or PostgreSQL engine."""
+    engine = create_async_engine(_async_url(target), future=True, pool_pre_ping=True)
+    if engine.url.get_backend_name() == "sqlite":
+        event.listen(engine.sync_engine, "connect", _apply_sqlite_pragmas)
     return engine
 
 
-def make_sync_engine(path: Path) -> Engine:
+def make_sync_engine(target: Path | str) -> Engine:
     """Create the sync engine used for the encrypted api_keys table.
 
     Key reads happen synchronously (``get_llm_config`` → ``load_config_file`` →
     ``resolve_api_key``), so a sync engine avoids threading async through
     ``llm.py``. It points at the same file as the async engine.
     """
-    engine = create_engine(_url(path, driver=""), future=True)
-    event.listen(engine, "connect", _apply_sqlite_pragmas)
+    engine = create_engine(_sync_url(target), future=True, pool_pre_ping=True)
+    if engine.url.get_backend_name() == "sqlite":
+        event.listen(engine, "connect", _apply_sqlite_pragmas)
     return engine
 
 
@@ -65,7 +93,8 @@ def init_models_sync(engine: Engine) -> None:
 
     # ``create_all`` does not ALTER existing SQLite tables. Keep this additive
     # migration idempotent so older local databases can load resumes safely.
-    with engine.begin() as conn:
-        columns = conn.exec_driver_sql("PRAGMA table_info(resumes)").mappings().all()
-        if columns and "interview_prep" not in {column["name"] for column in columns}:
-            conn.exec_driver_sql("ALTER TABLE resumes ADD COLUMN interview_prep TEXT")
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            columns = conn.exec_driver_sql("PRAGMA table_info(resumes)").mappings().all()
+            if columns and "interview_prep" not in {column["name"] for column in columns}:
+                conn.exec_driver_sql("ALTER TABLE resumes ADD COLUMN interview_prep TEXT")

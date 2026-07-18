@@ -5,7 +5,7 @@
  */
 
 const DEFAULT_PUBLIC_API_URL = '/';
-const INTERNAL_API_ORIGIN = 'http://127.0.0.1:8000';
+const INTERNAL_API_ORIGIN = process.env.BACKEND_ORIGIN ?? 'http://127.0.0.1:8000';
 
 function normalizeApiUrl(value: string): string {
   const trimmed = value.trim();
@@ -74,7 +74,23 @@ export async function apiFetch(
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    let requestHeaders = options?.headers;
+    const headers = new Headers(requestHeaders);
+    if (typeof window !== 'undefined' && !headers.has('Authorization')) {
+      const { getSupabaseBrowserClient } = await import('@/lib/supabase/client');
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.access_token) {
+          headers.set('Authorization', `Bearer ${data.session.access_token}`);
+          requestHeaders = headers;
+        }
+      }
+    }
+    const signal = options?.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal;
+    return await fetch(url, { ...options, headers: requestHeaders, signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(

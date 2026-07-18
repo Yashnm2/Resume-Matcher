@@ -5,19 +5,14 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
-
-# Fix for Windows: Use ProactorEventLoop for subprocess support (Playwright)
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import settings
 from app.database import db
-from app.pdf import close_pdf_renderer, init_pdf_renderer
+from app.pdf import close_pdf_renderer
 from app.routers import (
     applications_router,
     config_router,
@@ -26,7 +21,14 @@ from app.routers import (
     jobs_router,
     resume_wizard_router,
     resumes_router,
+    scout_router,
 )
+
+# Fix for Windows: Use ProactorEventLoop for subprocess support (Playwright)
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+logger = logging.getLogger(__name__)
 
 
 def _configure_application_logging() -> None:
@@ -37,12 +39,24 @@ def _configure_application_logging() -> None:
 
 _configure_application_logging()
 
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.deployment_environment,
+        enable_tracing=True,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    from app.services.hf_state import periodic_state_sync, restore_state, sync_state
+
+    await restore_state()
     # Import a legacy TinyDB database into SQLite if present (idempotent).
     # Fail-fast on error: starting with an empty DB would look like data loss.
     from app.scripts.migrate_tinydb_to_sqlite import migrate as migrate_tinydb
@@ -55,9 +69,19 @@ async def lifespan(app: FastAPI):
     from app.config import migrate_legacy_keys
 
     migrate_legacy_keys()
+    state_sync_task = asyncio.create_task(periodic_state_sync())
     # PDF renderer uses lazy initialization - will initialize on first use
     # await init_pdf_renderer()
     yield
+    state_sync_task.cancel()
+    try:
+        await state_sync_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await sync_state()
+    except Exception:
+        logger.exception("Final database snapshot failed during shutdown")
     # Shutdown - wrap each cleanup in try-except to ensure all resources are released
     try:
         await close_pdf_renderer()
@@ -94,6 +118,7 @@ app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(enrichment_router, prefix="/api/v1")
 app.include_router(applications_router, prefix="/api/v1")
 app.include_router(resume_wizard_router, prefix="/api/v1")
+app.include_router(scout_router, prefix="/api/v1")
 
 
 @app.get("/")
