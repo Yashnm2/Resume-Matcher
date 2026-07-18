@@ -20,7 +20,9 @@ COPY apps/backend/alembic ./alembic
 COPY apps/backend/alembic.ini ./alembic.ini
 RUN pip install .
 
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/backend/data \
+    && chown -R appuser:appuser /app
 USER appuser
 RUN python -m playwright install chromium
 
