@@ -1,13 +1,12 @@
 """LLM configuration endpoints."""
 
-import json
 import logging
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from app.config import settings
-from app.llm import check_llm_health, LLMConfig, resolve_api_key
+from app.llm import check_llm_health, get_llm_config, LLMConfig, resolve_api_key
 from app.schemas import (
     LLMConfigRequest,
     LLMConfigResponse,
@@ -44,6 +43,14 @@ from app.config_cache import invalidate_config_cache
 from app.database import db
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
+
+
+def _require_llm_configuration_unlocked() -> None:
+    if settings.llm_configuration_locked:
+        raise HTTPException(
+            status_code=403,
+            detail="LLM configuration is managed by the deployment environment.",
+        )
 
 
 def _get_config_path() -> Path:
@@ -95,6 +102,16 @@ async def _log_llm_health_check(config: LLMConfig) -> None:
 @router.get("/llm-api-key", response_model=LLMConfigResponse)
 async def get_llm_config_endpoint() -> LLMConfigResponse:
     """Get current LLM configuration (API key masked)."""
+    if settings.llm_configuration_locked:
+        config = get_llm_config()
+        return LLMConfigResponse(
+            provider=config.provider,
+            model=config.model,
+            api_key=_mask_api_key(config.api_key),
+            api_base=config.api_base,
+            reasoning_effort=config.reasoning_effort,
+        )
+
     stored = _load_config()
 
     provider = stored.get("provider", settings.llm_provider)
@@ -122,6 +139,7 @@ async def update_llm_config(
     still need to persist the configuration. Connectivity can be verified via
     `/config/llm-test` and the System Status panel.
     """
+    _require_llm_configuration_unlocked()
     stored = _load_config()
 
     # Update only provided fields
@@ -181,6 +199,11 @@ async def test_llm_connection(request: LLMConfigRequest | None = None) -> dict:
     If request body is provided, tests with those values (for pre-save testing).
     Otherwise, tests with the currently saved configuration.
     """
+    if settings.llm_configuration_locked:
+        return await check_llm_health(
+            get_llm_config(), include_details=True, test_prompt="Hi"
+        )
+
     stored = _load_config()
 
     # Build config: use request values if provided, otherwise fall back to stored/default
@@ -460,6 +483,23 @@ async def get_api_keys_status() -> ApiKeyStatusResponse:
     Returns the configuration status for each supported provider.
     API keys are masked to show only the last 4 characters.
     """
+    if settings.llm_configuration_locked:
+        providers = [
+            ApiKeyProviderStatus(
+                provider=provider,
+                configured=(
+                    provider == settings.llm_provider and bool(settings.llm_api_key)
+                ),
+                masked_key=(
+                    _mask_key_short(settings.llm_api_key)
+                    if provider == settings.llm_provider
+                    else None
+                ),
+            )
+            for provider in SUPPORTED_PROVIDERS
+        ]
+        return ApiKeyStatusResponse(providers=providers)
+
     stored_keys = get_api_keys_from_config()
 
     providers = []
@@ -483,6 +523,7 @@ async def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysUpdateRespons
     Only updates the providers that are explicitly set in the request.
     Empty strings will clear the key for that provider.
     """
+    _require_llm_configuration_unlocked()
     stored_keys = get_api_keys_from_config()
     updated = []
 
@@ -568,6 +609,7 @@ async def delete_all_api_keys(confirm: str | None = None) -> dict:
         This is a local-only endpoint for single-user deployments.
         In production/multi-user scenarios, add proper authentication.
     """
+    _require_llm_configuration_unlocked()
     if confirm != "CLEAR_ALL_KEYS":
         raise HTTPException(
             status_code=400,
@@ -588,6 +630,7 @@ async def delete_api_key(provider: str) -> dict:
     Returns:
         Success message
     """
+    _require_llm_configuration_unlocked()
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(
             status_code=400,

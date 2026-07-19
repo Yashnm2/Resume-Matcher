@@ -5,6 +5,7 @@ from unittest.mock import patch, AsyncMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config import settings
 from app.main import app
 
 
@@ -32,6 +33,32 @@ class TestLlmConfig:
         assert data["provider"] == "openai"
         # API key should be masked
         assert "****" in data["api_key"] or "*" in data["api_key"]
+
+    async def test_locked_config_uses_environment_and_rejects_updates(self, client):
+        with (
+            patch.object(settings, "llm_configuration_locked", True),
+            patch.object(settings, "llm_provider", "openai"),
+            patch.object(settings, "llm_model", "gpt-5.6-sol"),
+            patch.object(settings, "llm_api_key", "sk-test-locked-key"),
+            patch.object(settings, "reasoning_effort", "medium"),
+        ):
+            async with client:
+                fetched = await client.get("/api/v1/config/llm-api-key")
+                updated = await client.put(
+                    "/api/v1/config/llm-api-key",
+                    json={"model": "different-model"},
+                )
+                keys_updated = await client.post(
+                    "/api/v1/config/api-keys",
+                    json={"openai": "different-key"},
+                )
+
+        assert fetched.status_code == 200
+        assert fetched.json()["provider"] == "openai"
+        assert fetched.json()["model"] == "gpt-5.6-sol"
+        assert "sk-test-locked-key" not in fetched.text
+        assert updated.status_code == 403
+        assert keys_updated.status_code == 403
 
     @patch("app.routers.config._save_config")
     @patch("app.routers.config._load_config")

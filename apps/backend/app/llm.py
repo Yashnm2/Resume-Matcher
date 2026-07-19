@@ -373,6 +373,9 @@ def resolve_api_key(stored: dict, provider: str) -> str:
     endpoint) must call this function instead of reading ``stored["api_key"]``
     directly.
     """
+    if settings.llm_configuration_locked:
+        return settings.llm_api_key
+
     api_key = stored.get("api_key", "")
     if not api_key:
         api_keys = stored.get("api_keys", {})
@@ -401,6 +404,15 @@ def get_llm_config() -> LLMConfig:
     field explicitly (empty string persisted by the PUT handler) will not
     have it restored.
     """
+    if settings.llm_configuration_locked:
+        return LLMConfig(
+            provider=settings.llm_provider,
+            model=settings.llm_model,
+            api_key=settings.llm_api_key,
+            api_base=settings.llm_api_base,
+            reasoning_effort=settings.reasoning_effort,
+        )
+
     stored = load_config_file()
     provider = stored.get("provider", settings.llm_provider)
     model = stored.get("model", settings.llm_model)
