@@ -12,7 +12,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.routers.resumes import MAX_FILE_SIZE
+from app.routers.resumes import MAX_FILE_SIZE, _is_pdf_upload
 
 
 @pytest.fixture
@@ -22,6 +22,19 @@ def client():
 
 
 class TestUploadGuards:
+    def test_recognizes_pdf_with_standard_mime(self):
+        assert _is_pdf_upload("resume.pdf", "application/pdf", b"%PDF-1.7\n")
+
+    def test_recognizes_pdf_with_generic_browser_mime(self):
+        assert _is_pdf_upload(
+            "resume.pdf", "application/octet-stream", b"%PDF-1.7\n"
+        )
+
+    def test_rejects_spoofed_pdf_extension(self):
+        assert not _is_pdf_upload(
+            "resume.pdf", "application/pdf", b"this is not a PDF"
+        )
+
     async def test_rejects_unsupported_file_type(self, client):
         async with client:
             resp = await client.post(
@@ -39,6 +52,15 @@ class TestUploadGuards:
             )
         assert resp.status_code == 400
         assert resp.json()["detail"] == "Empty file"
+
+    async def test_rejects_invalid_pdf_signature(self, client):
+        async with client:
+            resp = await client.post(
+                "/api/v1/resumes/upload",
+                files={"file": ("resume.pdf", b"not a pdf", "application/pdf")},
+            )
+        assert resp.status_code == 422
+        assert "not a valid PDF" in resp.json()["detail"]
 
     async def test_rejects_oversized_file(self, client):
         oversized = b"x" * (MAX_FILE_SIZE + 1)

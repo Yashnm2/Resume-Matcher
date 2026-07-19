@@ -621,10 +621,24 @@ router = APIRouter(prefix="/resumes", tags=["Resumes"])
 
 ALLOWED_TYPES = {
     "application/pdf",
+    "application/x-pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+GENERIC_BINARY_TYPES = {"application/octet-stream", "binary/octet-stream"}
 MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB
+
+
+def _is_pdf_upload(filename: str | None, content_type: str | None, content: bytes) -> bool:
+    """Recognize a real PDF even when a browser sends a generic MIME type."""
+    suffix = Path(filename or "").suffix.lower()
+    claimed_pdf = content_type in {"application/pdf", "application/x-pdf"}
+    generic_pdf = suffix == ".pdf" and content_type in GENERIC_BINARY_TYPES
+    if not (claimed_pdf or suffix == ".pdf" or generic_pdf):
+        return False
+
+    # ISO 32000 permits the PDF header to appear within the first 1024 bytes.
+    return b"%PDF-" in content[:1024]
 
 
 @router.post("/upload", response_model=ResumeUploadResponse)
@@ -634,13 +648,6 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     Converts the file to Markdown and stores it in the database.
     Optionally parses to structured JSON if LLM is configured.
     """
-    # Validate file type
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type: {file.content_type}. Allowed: PDF, DOC, DOCX",
-        )
-
     # Read and validate size
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
@@ -652,9 +659,36 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
+    filename = file.filename or "resume.pdf"
+    suffix = Path(filename).suffix.lower()
+    pdf_claimed = suffix == ".pdf" or file.content_type in {
+        "application/pdf",
+        "application/x-pdf",
+    }
+    is_pdf = _is_pdf_upload(filename, file.content_type, content)
+
+    # Browsers and operating systems sometimes label PDFs as generic binary
+    # data, so use the extension plus the PDF signature as a safe fallback.
+    supported_type = file.content_type in ALLOWED_TYPES or (
+        suffix == ".pdf" and file.content_type in GENERIC_BINARY_TYPES
+    )
+    if not supported_type:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Allowed: PDF, DOC, DOCX",
+        )
+    if pdf_claimed and not is_pdf:
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to parse document. The uploaded file is not a valid PDF.",
+        )
+
     # Convert to markdown
     try:
-        markdown_content = await parse_document(content, file.filename or "resume.pdf")
+        # A MIME-detected PDF may have no extension; give the parser the correct
+        # suffix so it selects its PDF converter.
+        parser_filename = filename if suffix == ".pdf" or not is_pdf else f"{filename}.pdf"
+        markdown_content = await parse_document(content, parser_filename)
     except Exception as e:
         logger.error(f"Document parsing failed: {e}")
         raise HTTPException(
