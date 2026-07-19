@@ -43,7 +43,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -112,7 +113,8 @@ RUN mkdir -p /app/backend/data
 
 # Create a non-root user for security
 RUN useradd -m -u 1000 appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /ms-playwright \
+    && chown -R appuser:appuser /app /ms-playwright
 
 USER appuser
 
