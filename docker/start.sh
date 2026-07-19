@@ -16,6 +16,14 @@ BOLD='\033[1m'
 FRONTEND_PORT="${PORT:-3000}"
 BACKEND_PORT="8000"
 
+# The browser and API are exposed on one origin.  PDF generation runs inside the
+# container, so default to the private loopback address instead of assuming the
+# platform happened to assign port 3000.  An explicitly configured public URL
+# still wins (useful when the print route is protected by an external proxy).
+if [ -z "${FRONTEND_BASE_URL:-}" ]; then
+    export FRONTEND_BASE_URL="http://127.0.0.1:${FRONTEND_PORT}"
+fi
+
 # Print banner
 print_banner() {
     echo -e "${CYAN}"
@@ -206,6 +214,16 @@ fi
 echo ""
 info "Starting backend server on internal port ${BACKEND_PORT}..."
 cd /app/backend
+
+# A single-service deployment must be self-initializing.  The old split-service
+# instructions ran Alembic from a separate API pre-deploy command, which left a
+# root-Dockerfile deployment with an empty/outdated Postgres schema.
+if [ -n "${DATABASE_URL:-}" ]; then
+    info "Applying database migrations..."
+    alembic upgrade head
+    status "Database schema is current"
+fi
+
 trap '' SIGTERM SIGINT SIGQUIT
 python -m uvicorn app.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --log-level "${UVICORN_LOG_LEVEL}" &
 BACKEND_PID=$!

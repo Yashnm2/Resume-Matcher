@@ -225,26 +225,22 @@ For detailed setup instructions, see **[SETUP.md](SETUP.md)** (English) or: [Esp
 
 ### Quick Start
 
-Fastest for MacOS, WSL and Ubuntu users:
+The supported setup is one container and one public port. You do not need to
+install or start the frontend and backend separately:
 
 ```bash
-# Clone the repository
 git clone https://github.com/srbhr/Resume-Matcher.git
 cd Resume-Matcher
-
-# Backend (Terminal 1)
-cd apps/backend
-cp .env.example .env        # Configure your AI provider
-uv sync                      # Install dependencies
-uv run app
-
-# Frontend (Terminal 2)
-cd apps/frontend
-npm install
-npm run dev
+docker compose up --build
 ```
 
-Open **<http://localhost:3000>** and configure your AI provider in Settings.
+Open **<http://localhost:3000>** and configure your AI provider in Settings. The
+UI is served at `/` and the private API is available through the same origin at
+`/api`; the container starts and supervises both runtimes.
+
+For GitHub-based hosting, use the checked-in `railway.toml` or `render.yaml`.
+Both build the root `Dockerfile` as one web service. See the
+[single-service deployment guide](deploy/RAILWAY.md).
 
 ### Supported AI Providers
 

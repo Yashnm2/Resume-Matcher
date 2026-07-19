@@ -1,10 +1,12 @@
 services:
   - type: web
-    name: resume-matcher-api
+    name: resume-matcher
     runtime: docker
     plan: free
-    dockerfilePath: ./Dockerfile.backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/v1/health
+    autoDeployTrigger: commit
     envVars:
       - key: DEPLOYMENT_ENVIRONMENT
         value: production
@@ -14,10 +16,6 @@ services:
         sync: false
       - key: ENCRYPTION_SECRET
         generateValue: true
-      - key: FRONTEND_BASE_URL
-        sync: false
-      - key: PUBLIC_APP_URL
-        sync: false
       - key: HF_STATE_REPO_ID
         sync: false
       - key: HF_TOKEN
