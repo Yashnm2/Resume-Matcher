@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import ValidationError
 
@@ -68,6 +68,11 @@ from app.services.cover_letter import (
 )
 from app.services.interview_prep import generate_interview_prep
 from app.prompts import DEFAULT_IMPROVE_PROMPT_ID, IMPROVE_PROMPT_OPTIONS
+from app.routers.llm_guard import (
+    LLM_CONFIGURATION_REQUIRED_DETAIL,
+    locked_llm_unavailable,
+    require_locked_llm_configuration,
+)
 
 
 async def _auto_create_tracker_application(
@@ -715,30 +720,42 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
         original_markdown=markdown_content,
     )
 
-    # Try to parse to structured JSON (optional, may fail if LLM not configured)
-    try:
-        processed_data = await parse_resume_to_json(markdown_content)
-        await db.update_resume(
-            resume["resume_id"],
-            {
-                "processed_data": processed_data,
-                "processing_status": "ready",
-            },
-        )
-        resume["processed_data"] = processed_data
-        resume["processing_status"] = "ready"
-    except Exception as e:
-        # LLM parsing failed, update status to failed
-        logger.warning(f"Resume parsing to JSON failed for {file.filename}: {e}")
+    parsing_configuration_missing = locked_llm_unavailable()
+    if parsing_configuration_missing:
         await db.update_resume(resume["resume_id"], {"processing_status": "failed"})
         resume["processing_status"] = "failed"
+    else:
+        # Try to parse to structured JSON (optional, may fail if LLM is unavailable)
+        try:
+            processed_data = await parse_resume_to_json(markdown_content)
+            await db.update_resume(
+                resume["resume_id"],
+                {
+                    "processed_data": processed_data,
+                    "processing_status": "ready",
+                },
+            )
+            resume["processed_data"] = processed_data
+            resume["processing_status"] = "ready"
+        except Exception as e:
+            # LLM parsing failed, update status to failed
+            logger.warning(f"Resume parsing to JSON failed for {file.filename}: {e}")
+            await db.update_resume(
+                resume["resume_id"], {"processing_status": "failed"}
+            )
+            resume["processing_status"] = "failed"
 
     # Return accurate status to client (API-001 fix)
     return ResumeUploadResponse(
         message=(
             f"File {file.filename} uploaded successfully"
             if resume["processing_status"] == "ready"
-            else f"File {file.filename} uploaded but parsing failed"
+            else (
+                f"File {file.filename} uploaded, but "
+                f"{LLM_CONFIGURATION_REQUIRED_DETAIL}"
+                if parsing_configuration_missing
+                else f"File {file.filename} uploaded but parsing failed"
+            )
         ),
         request_id=str(uuid4()),
         resume_id=resume["resume_id"],
@@ -827,7 +844,11 @@ async def list_resumes(include_master: bool = Query(False)) -> ResumeListRespons
     return ResumeListResponse(request_id=str(uuid4()), data=summaries)
 
 
-@router.post("/improve/preview", response_model=ImproveResumeResponse)
+@router.post(
+    "/improve/preview",
+    response_model=ImproveResumeResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def improve_resume_preview_endpoint(
     request: ImproveResumeRequest,
 ) -> ImproveResumeResponse:
@@ -1146,7 +1167,11 @@ async def _improve_preview_flow(
     )
 
 
-@router.post("/improve/confirm", response_model=ImproveResumeResponse)
+@router.post(
+    "/improve/confirm",
+    response_model=ImproveResumeResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def improve_resume_confirm_endpoint(
     request: ImproveResumeConfirmRequest,
 ) -> ImproveResumeResponse:
@@ -1294,7 +1319,11 @@ async def improve_resume_confirm_endpoint(
         _raise_improve_error("confirm", stage, e, detail)
 
 
-@router.post("/improve", response_model=ImproveResumeResponse)
+@router.post(
+    "/improve",
+    response_model=ImproveResumeResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def improve_resume_endpoint(
     request: ImproveResumeRequest,
 ) -> ImproveResumeResponse:
@@ -1705,7 +1734,11 @@ async def delete_resume(resume_id: str) -> dict:
     return {"message": "Resume deleted successfully"}
 
 
-@router.post("/{resume_id}/retry-processing", response_model=ResumeUploadResponse)
+@router.post(
+    "/{resume_id}/retry-processing",
+    response_model=ResumeUploadResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def retry_processing(resume_id: str) -> ResumeUploadResponse:
     """Retry AI processing for a failed or stuck resume.
 
@@ -1796,7 +1829,9 @@ async def update_title(resume_id: str, request: UpdateTitleRequest) -> dict:
 
 
 @router.post(
-    "/{resume_id}/generate-cover-letter", response_model=GenerateContentResponse
+    "/{resume_id}/generate-cover-letter",
+    response_model=GenerateContentResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
 )
 async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentResponse:
     """Generate a cover letter on-demand for an existing tailored resume.
@@ -1868,7 +1903,11 @@ async def generate_cover_letter_endpoint(resume_id: str) -> GenerateContentRespo
     )
 
 
-@router.post("/{resume_id}/generate-outreach", response_model=GenerateContentResponse)
+@router.post(
+    "/{resume_id}/generate-outreach",
+    response_model=GenerateContentResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
     """Generate an outreach message on-demand for an existing tailored resume.
 
@@ -1942,6 +1981,7 @@ async def generate_outreach_endpoint(resume_id: str) -> GenerateContentResponse:
 @router.post(
     "/{resume_id}/generate-interview-prep",
     response_model=GenerateInterviewPrepResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
 )
 async def generate_interview_prep_endpoint(
     resume_id: str,

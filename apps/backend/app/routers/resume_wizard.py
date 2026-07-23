@@ -21,6 +21,7 @@ from app.services.resume_wizard import (
     build_initial_wizard_state,
     run_ai_turn,
 )
+from app.routers.llm_guard import require_locked_llm_configuration
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,12 @@ async def resume_wizard_turn(
             return ResumeWizardTurnResponse(state=apply_review(request.state))
 
         if action == "skip":
+            require_locked_llm_configuration()
             state = await run_ai_turn(request.state, "", skip=True)
             return ResumeWizardTurnResponse(state=state)
 
         answer_text = request.answer.text if request.answer else ""
+        require_locked_llm_configuration()
         state = await run_ai_turn(request.state, answer_text, skip=False)
         return ResumeWizardTurnResponse(state=state)
     except HTTPException:

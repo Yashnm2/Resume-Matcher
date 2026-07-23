@@ -7,7 +7,7 @@ import logging
 import re
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.config_cache import get_content_language
 from app.database import db
@@ -34,6 +34,7 @@ from app.schemas.enrichment import (
     RegenerateResponse,
     RegeneratedItem,
 )
+from app.routers.llm_guard import require_locked_llm_configuration
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,11 @@ def _extract_item_from_resume(processed_data: dict, item_id: str) -> dict:
     return {}
 
 
-@router.post("/analyze/{resume_id}", response_model=AnalysisResponse)
+@router.post(
+    "/analyze/{resume_id}",
+    response_model=AnalysisResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def analyze_resume(resume_id: str) -> AnalysisResponse:
     """Analyze a resume to identify items that need enrichment.
 
@@ -169,7 +174,11 @@ async def analyze_resume(resume_id: str) -> AnalysisResponse:
         )
 
 
-@router.post("/enhance", response_model=EnhancementPreview)
+@router.post(
+    "/enhance",
+    response_model=EnhancementPreview,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def generate_enhancements(request: EnhanceRequest) -> EnhancementPreview:
     """Generate enhanced descriptions from user answers.
 
@@ -484,7 +493,11 @@ async def _regenerate_skills(
     )
 
 
-@router.post("/regenerate", response_model=RegenerateResponse)
+@router.post(
+    "/regenerate",
+    response_model=RegenerateResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def regenerate_items(request: RegenerateRequest) -> RegenerateResponse:
     """Regenerate selected resume items based on user feedback.
 

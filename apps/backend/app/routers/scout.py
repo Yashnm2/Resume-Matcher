@@ -46,6 +46,7 @@ from app.services.scout import (
     resolve_email_alert,
     scan_source,
 )
+from app.routers.llm_guard import require_locked_llm_configuration
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["scout"])
@@ -325,7 +326,11 @@ async def replace_opportunity(
     return replacement
 
 
-@router.post("/opportunities/{match_id}/prepare", response_model=ArtifactPackResponse)
+@router.post(
+    "/opportunities/{match_id}/prepare",
+    response_model=ArtifactPackResponse,
+    dependencies=[Depends(require_locked_llm_configuration)],
+)
 async def prepare_opportunity_pack(
     match_id: str,
     request: PreparePackRequest,
