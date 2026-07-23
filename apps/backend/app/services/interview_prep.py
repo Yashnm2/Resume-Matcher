@@ -118,8 +118,9 @@ async def generate_interview_prep(
     result = await complete_json(
         prompt=prompt,
         system_prompt=(
-            "You are a career interview coach. Output truthful, resume-grounded "
-            "interview preparation as JSON only."
+            "You are an evidence-first career interview coach. Prioritize the job's "
+            "must-have requirements, structure answer points with truthful STAR evidence "
+            "when available, never fill missing facts, and output JSON only."
         ),
         max_tokens=max_tokens,
         schema_type="interview_prep",

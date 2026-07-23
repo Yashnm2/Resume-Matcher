@@ -13,8 +13,12 @@ from app.prompts.templates import (
     COVER_LETTER_PROMPT,
     DIFF_IMPROVE_PROMPT,
     INTERVIEW_PREP_PROMPT,
+    OUTREACH_MESSAGE_PROMPT,
+    SKILL_TARGET_PLAN_PROMPT,
 )
-from app.prompts.refinement import KEYWORD_INJECTION_PROMPT
+from app.prompts.enrichment import ANALYZE_RESUME_PROMPT, ENHANCE_DESCRIPTION_PROMPT
+from app.prompts.refinement import KEYWORD_INJECTION_PROMPT, VALIDATION_POLISH_PROMPT
+from app.prompts.resume_wizard import RESUME_WIZARD_TURN_PROMPT
 
 
 class TestJdIncorporationIsDefault:
@@ -52,3 +56,56 @@ class TestAntiFabricationClausesPresent:
         assert "Do NOT translate JSON property names" in INTERVIEW_PREP_PROMPT
         assert "role_fit_analysis" in INTERVIEW_PREP_PROMPT
         assert "talking_points" in INTERVIEW_PREP_PROMPT
+
+
+class TestEvidenceBasedWritingRubric:
+    def test_tailoring_builds_requirement_to_evidence_map(self):
+        assert "requirement-to-evidence map" in DIFF_IMPROVE_PROMPT
+        assert "explicit must-haves" in DIFF_IMPROVE_PROMPT
+        assert "Skip any requirement without supporting resume evidence" in DIFF_IMPROVE_PROMPT
+
+    def test_tailoring_uses_accomplishment_bullets_without_fake_metrics(self):
+        assert "Action + Project/Task + Result" in DIFF_IMPROVE_PROMPT
+        assert "scope, method, complexity" in DIFF_IMPROVE_PROMPT
+        assert "one accomplishment" in DIFF_IMPROVE_PROMPT
+
+    def test_tailoring_avoids_keyword_stuffing(self):
+        assert "Never keyword-stuff" in DIFF_IMPROVE_PROMPT
+        assert "Never force a keyword into an unrelated bullet" in KEYWORD_INJECTION_PROMPT
+        assert "keywords are natural" in VALIDATION_POLISH_PROMPT.lower()
+
+    def test_skill_plan_requires_substantive_evidence(self):
+        assert "substantive evidence" in SKILL_TARGET_PLAN_PROMPT
+        assert "benefits or" in SKILL_TARGET_PLAN_PROMPT
+        assert "company boilerplate" in SKILL_TARGET_PLAN_PROMPT
+
+    def test_enrichment_asks_for_evidence_without_demanding_numbers(self):
+        assert "do not pressure the candidate to invent a metric" in ANALYZE_RESUME_PROMPT
+        assert "does not need every element" in ANALYZE_RESUME_PROMPT
+        assert "Never copy an example" in ANALYZE_RESUME_PROMPT
+        assert "Action + Project/Task + Result" in ENHANCE_DESCRIPTION_PROMPT
+
+    def test_wizard_builds_concise_truthful_master_resume(self):
+        assert "do not pad to reach a count" in RESUME_WIZARD_TURN_PROMPT
+        assert "Never convert a qualitative" in RESUME_WIZARD_TURN_PROMPT
+        assert "made-up number" in RESUME_WIZARD_TURN_PROMPT
+        assert "summary should be 2-4 concise lines" in RESUME_WIZARD_TURN_PROMPT
+
+
+class TestApplicationWritingRubric:
+    def test_cover_letter_proves_fit_instead_of_repeating_resume(self):
+        assert "TWO highest-priority job needs" in COVER_LETTER_PROMPT
+        assert "Do not merely restate resume bullets" in COVER_LETTER_PROMPT
+        assert "evidence matters for this role" in COVER_LETTER_PROMPT
+        assert "Do not invent a hiring manager" in COVER_LETTER_PROMPT
+
+    def test_outreach_has_specific_context_and_low_friction_ask(self):
+        assert "fabricate" in OUTREACH_MESSAGE_PROMPT
+        assert "familiarity or a referral" in OUTREACH_MESSAGE_PROMPT
+        assert "15-20 minute conversation" in OUTREACH_MESSAGE_PROMPT
+        assert "not demanding a job" in OUTREACH_MESSAGE_PROMPT
+
+    def test_interview_prep_uses_truthful_star_when_possible(self):
+        assert "compact STAR structure" in INTERVIEW_PREP_PROMPT
+        assert "invent missing STAR elements" in INTERVIEW_PREP_PROMPT
+        assert "one verified resume fact to one job need" in INTERVIEW_PREP_PROMPT

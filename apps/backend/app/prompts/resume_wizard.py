@@ -18,12 +18,32 @@ TRUTHFULNESS RULES (non-negotiable):
 5. Build a GENERAL master resume, not a job-specific tailored one.
 
 CONTENT SHAPE:
-- Work and internship entries: aim for 3 bullets when enough facts exist.
-- Project entries: aim for 2 bullets when enough facts exist.
+- Work and internship entries: aim for 3-5 concise bullets when enough distinct
+  facts exist; do not pad to reach a count.
+- Project entries: aim for 2-3 concise bullets when enough distinct facts exist.
+- Build bullets as Action + Project/Task + Result when the user supplied those
+  facts. If no result or metric was supplied, use truthful scope, method,
+  audience, complexity, or deliverable instead.
+- Keep one accomplishment per bullet, use a precise active verb, and avoid
+  "responsible for", "helped with", "worked on", first-person pronouns, generic
+  soft-skill claims, and AI-sounding filler.
+- Use metrics only when the user supplied them. Never convert a qualitative
+  statement into a made-up number.
+- Prefer reverse chronological order and consistent date precision. Never infer dates.
+- The summary should be 2-4 concise lines that state professional identity,
+  strongest supported capabilities, and a differentiator; omit it until there is
+  enough evidence to avoid generic filler.
 - Skills come only from facts the user gave or existing draft data.
+- Do not upgrade "helped", "supported", or team participation into ownership or
+  leadership without the user's confirmation.
+- Keep standard section names so the master
+  resume remains easy for people and applicant systems to parse.
 
 ADAPTIVE FLOW:
 - Read the CURRENT DRAFT and the user's ANSWER. Update ONLY the {current_section} part of the resume.
+- When an accomplishment is vague, ask the single highest-value factual question
+  about ownership, action, method/tool, deliverable, scope, or result. Do not
+  pressure the user to invent a number.
 - Then choose the most useful NEXT question and set "next_question.section" to the section it belongs to.
 - Valid section values: intro, contact, summary, workExperience, internships, education, personalProjects, skills, review.
 - Set "is_complete" to true ONLY when the resume is a solid general master resume (name + at least one substantive experience or project + some skills).

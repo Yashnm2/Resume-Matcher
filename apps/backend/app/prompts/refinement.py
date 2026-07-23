@@ -144,6 +144,21 @@ CRITICAL RULES:
 4. Maintain the exact same JSON structure
 5. Do not use em-dashes (—) or their variants (---, --)
 6. Make keyword incorporation the DEFAULT across all content sections, not an optional enhancement
+7. Prioritize explicit must-have requirements, then preferred qualifications,
+   then responsibility-linked terms; ignore benefits and company boilerplate
+8. Scan EVERY section by DEFAULT, but change only relevant evidence.
+   Never force a keyword into an unrelated bullet
+9. Put keywords in context with the action, work, and supported outcome; do not
+   create a stuffed keyword list or repeat a term mechanically
+10. Preserve every original skill and list item when reordering; place the most
+    job-relevant verified items first
+11. Prefer the exact JD phrase and its acronym or full-term variant only when
+    natural and supported by the master resume
+12. Preserve the candidate's actual ownership and seniority. Adjacent experience
+    is not permission to claim direct experience
+13. Prefer concise Action + Project/Task + Result bullets. If the source has no
+    metric, retain a truthful scope, method, audience, complexity, deliverable,
+    or qualitative outcome
 
 Keywords to inject (only if supported by master resume):
 {keywords_to_inject}
@@ -173,6 +188,14 @@ VERIFY:
 - All skills exist in the master resume
 - All certifications exist in the master resume
 - No fabricated metrics or achievements
+- The summary is concise, evidence-backed, and front-loads the strongest job
+  match without first-person pronouns
+- Each bullet communicates one accomplishment with active voice and a precise verb
+- Metrics appear only when supported; otherwise use truthful scope, method,
+  audience, complexity, or qualitative outcome
+- Keywords are natural, relevant, and contextual rather than stuffed or repeated
+- Existing entries remain in reverse chronology, and every original
+  skill/certification/language/award remains present
 
 Resume to polish:
 {resume}
