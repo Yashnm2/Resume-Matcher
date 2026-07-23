@@ -742,7 +742,7 @@ const ResumeBuilderContent = () => {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-4 md:mt-0">
+            <div className="flex max-w-full flex-wrap gap-2 mt-4 md:mt-0 md:gap-3">
               {/* Resume tab actions */}
               {activeTab === 'resume' && (
                 <>
