@@ -7,13 +7,14 @@ IMPORTANT: Generate ALL output text (questions, placeholders, summaries, weaknes
 RESUME DATA (JSON):
 {resume_json}
 
-WEAK DESCRIPTION INDICATORS:
+WEAK DESCRIPTION INDICATORS (judge the bullet as a whole; a bullet does not need every element):
 1. Generic phrases: "responsible for", "worked on", "helped with", "assisted in", "involved in"
-2. Missing metrics/impact: No numbers, percentages, dollar amounts, or measurable outcomes
+2. Missing outcome or purpose: It names a task but not what changed, improved, shipped, enabled, or was learned
 3. Unclear scope: Vague about team size, project scale, user count, or responsibilities
 4. No technologies/tools: Missing specific tech stack, tools, or methodologies used
 5. Passive voice without ownership: Not clear what the candidate personally accomplished
 6. Too brief: Single short bullet that doesn't explain the work
+7. Low signal: It uses generic soft-skill claims or filler instead of observable evidence
 
 GOOD DESCRIPTION EXAMPLES (for reference):
 - "Led migration of 15 microservices to Kubernetes, reducing deployment time by 60%"
@@ -27,6 +28,8 @@ TASK:
 4. Prioritize the most impactful questions that will yield the best improvements
 5. If multiple items need enhancement, distribute questions wisely (e.g., 2-3 per item)
 6. Questions should help extract: metrics, technologies, scope, impact, and specific contributions
+7. Prefer questions that recover the missing part of Action + Project/Task + Result, but do not pressure the candidate to invent a metric
+8. Ask for truthful alternatives to metrics: scale, method, complexity, audience, frequency, constraints, deliverable, or qualitative outcome
 
 OUTPUT FORMAT (JSON only, no other text):
 {{
@@ -77,6 +80,8 @@ IMPORTANT RULES:
 - Use "proj_0", "proj_1" for project items (based on array index)
 - Generate unique question IDs: "q_0", "q_1", "q_2", etc. (max q_5)
 - Questions should be specific to the role/project context
+- Do not mark a strong qualitative accomplishment weak merely because it lacks a number
+- Do not assume every bullet needs a technology, metric, or leadership claim
 - Keep questions conversational but professional
 - Placeholder text should give concrete examples
 - Prioritize quality over quantity - ask the most impactful questions first"""
@@ -98,11 +103,12 @@ CANDIDATE'S ADDITIONAL CONTEXT:
 TASK:
 Generate NEW bullet points to ADD to the existing description. The original bullets will be kept as-is.
 New bullets should be:
-1. Action-oriented: Start with strong verbs (Led, Built, Architected, Implemented, Optimized)
+1. Action-oriented: Start with a precise verb that matches what the candidate actually did; do not inflate ownership with "Led" or "Architected"
 2. Quantified: Include metrics, numbers, percentages where the candidate provided them
 3. Technically specific: Mention technologies, tools, and methodologies
 4. Impact-focused: Clearly state the business or technical outcome
 5. Ownership-clear: Show what the candidate personally did vs. the team
+6. Structured around one accomplishment: Action + Project/Task + Result when supported, or Action + truthful scope/method when no result was provided
 
 OUTPUT FORMAT (JSON only, no other text):
 {{
@@ -114,12 +120,13 @@ OUTPUT FORMAT (JSON only, no other text):
 }}
 
 IMPORTANT RULES:
-- Generate 2-4 NEW bullet points to ADD (not replace)
+- Generate only 1-3 distinct NEW bullet points to ADD (not replace); fewer is better when the evidence supports fewer
 - DO NOT repeat or rephrase existing bullets - only add new information
 - Preserve factual accuracy - only use information provided by the candidate
 - Don't invent metrics or details not given by the candidate
 - If candidate's answers are brief, still add what you can
 - Keep bullets concise (1-2 lines each)
+- Keep one accomplishment per bullet and put the strongest, most specific bullet first
 - Use past tense for past roles, present tense for current roles
 - Avoid buzzwords and fluff - be specific and concrete
 - Focus on information from the candidate's answers that isn't already in the original bullets"""
@@ -152,6 +159,7 @@ Based on the user's feedback, completely REWRITE the description bullets. The ne
 3. Highlight quantifiable impact ONLY when it already exists in the current description or the user's feedback (never invent numbers)
 4. Be technically specific with tools/technologies
 5. Show clear impact and ownership
+6. Use one focused accomplishment per bullet, ideally Action + Project/Task + Result when the source supports it
 
 OUTPUT FORMAT (JSON only):
 {{
@@ -169,6 +177,8 @@ RULES:
 - Do NOT add any new facts, metrics, dates, companies, titles, or accomplishments that are not already present in CURRENT DESCRIPTION or USER'S FEEDBACK/INSTRUCTION
 - If the user asks for metrics but none exist in the provided text, do not fabricate numbers; rewrite to emphasize scope/impact qualitatively instead
 - Keep bullets concise (1-2 lines each)
+- Prefer precise, common verbs over inflated or AI-sounding verbs
+- Do not turn soft skills into unsupported self-ratings; demonstrate them through the work described
 - Use past tense for past roles, present tense for current"""
 
 

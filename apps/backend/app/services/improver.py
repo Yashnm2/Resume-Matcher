@@ -565,7 +565,11 @@ async def generate_resume_diffs(
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt="You are an expert resume editor. Output only valid JSON with targeted changes.",
+        system_prompt=(
+            "You are an evidence-first resume editor. Map the job's highest-priority "
+            "requirements to verified resume evidence, improve only supported claims, "
+            "and output valid JSON with targeted changes only."
+        ),
         max_tokens=4096,
         schema_type="diff",
     )
@@ -616,7 +620,11 @@ async def extract_job_keywords(job_description: str) -> dict[str, Any]:
 
     return await complete_json(
         prompt=prompt,
-        system_prompt="You are an expert job description analyzer.",
+        system_prompt=(
+            "You are a precise job description analyzer. Separate must-haves from "
+            "preferences, rank requirements by hiring importance, ignore boilerplate, "
+            "and output valid JSON only."
+        ),
         schema_type="keywords",
     )
 
@@ -859,8 +867,9 @@ async def generate_skill_target_plan(
     result = await complete_json(
         prompt=prompt,
         system_prompt=(
-            "You are a resume skill planning agent. Output only valid JSON with "
-            "target_skills and strategy_notes."
+            "You are an evidence-first resume skill planning agent. Select job-relevant "
+            "skills only when the resume contains substantive support. Output only valid "
+            "JSON with target_skills and strategy_notes."
         ),
         max_tokens=2048,
         schema_type="diff",
@@ -977,7 +986,11 @@ async def improve_resume(
 
     result = await complete_json(
         prompt=prompt,
-        system_prompt="You are an expert resume editor. Output only valid JSON.",
+        system_prompt=(
+            "You are an evidence-first resume editor. Prioritize verified must-have "
+            "matches, write concise accomplishment-focused content, never fabricate, "
+            "and output valid JSON only."
+        ),
         max_tokens=8192,
     )
 

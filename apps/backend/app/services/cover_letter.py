@@ -80,7 +80,11 @@ async def generate_cover_letter(
 
     result = await complete(
         prompt=prompt,
-        system_prompt="You are a professional career coach and resume writer. Write compelling, personalized cover letters.",
+        system_prompt=(
+            "You are an evidence-first application writer. Write concise, human cover "
+            "letters that connect the employer's highest-priority needs to specific, "
+            "verified candidate evidence without inventing details."
+        ),
         max_tokens=2048,
     )
 
@@ -129,7 +133,11 @@ async def generate_outreach_message(
 
     result = await complete(
         prompt=prompt,
-        system_prompt="You are a professional networking coach. Write genuine, engaging cold outreach messages.",
+        system_prompt=(
+            "You are a professional networking coach. Write brief, specific, respectful "
+            "outreach grounded only in the supplied context, with one evidence-backed "
+            "connection and one low-friction ask."
+        ),
         max_tokens=1024,
     )
 

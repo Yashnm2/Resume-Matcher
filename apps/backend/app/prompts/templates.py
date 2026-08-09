@@ -197,6 +197,14 @@ Extract numeric years (e.g., "5+ years" → 5) and infer seniority level.
 Set "company" to the hiring company name and "role" to the job title exactly as
 written in the posting; use an empty string for either if it is not stated.
 
+Extraction quality rules:
+- Separate explicit must-have requirements from preferred/nice-to-have requirements. Do not promote preferred qualifications into required_skills.
+- Order every list by hiring importance: explicit requirements first, then repeated or responsibility-linked terms, then secondary context.
+- Capture exact multi-word phrases, industry terms, tool names, credentials, and both the full term and acronym when the posting supplies both.
+- Turn responsibilities into concise capability phrases that can be matched to evidence, not vague single words.
+- Exclude benefits, equal-opportunity language, company boilerplate, generic culture adjectives, and application instructions from keywords.
+- Do not infer a requirement merely because it is common for the occupation.
+
 Job description:
 {job_description}"""
 
@@ -210,6 +218,9 @@ CRITICAL_TRUTHFULNESS_RULES_TEMPLATE = """CRITICAL TRUTHFULNESS RULES - NEVER VI
 7. {rule_7}
 8. Preserve factual accuracy - only use information provided by the candidate
 9. NEVER remove existing skills, certifications, languages, or awards. You may reorder by relevance, but every original item must remain.
+10. Treat the original resume as the evidence boundary. A plausible claim is still unsupported unless the original contains evidence for it.
+11. Never manufacture a metric from qualitative wording. If no number exists, improve specificity with truthful scope, method, audience, or outcome instead.
+12. Every edited claim must be defensible in an interview from the candidate's source material.
 
 Violation of these rules could cause serious problems for the candidate in job interviews.
 """
@@ -248,6 +259,10 @@ Rules:
 - For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - If the resume is non-technical, do NOT add technical jargon
+- Prioritize explicit must-haves, then preferred qualifications; do not spend edits on low-value boilerplate keywords
+- Put the strongest verified match early in the summary and within each relevant section, without changing chronology or bullet count
+- Write concise action + work + result bullets when the source supports all three; otherwise use action + scope or method without inventing a result
+- Use keywords in meaningful context, never as a stuffed list or awkward repetition
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Job Description:
@@ -277,6 +292,11 @@ Rules:
 - For customSections: preserve exact structure, item count, titles, subtitles, and years. If an item's description is an empty array [] in the original, keep it empty []. Do NOT generate descriptions for items that had none.
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - If resume is non-technical, keep language non-technical while still aligning keywords
+- Rank edits by requirement importance: explicit must-haves first, preferred qualifications second, generic wording last
+- Put the strongest verified match early in the summary and order bullets within an entry by relevance and impact when reordering is allowed
+- Use the job posting's exact phrase or acronym only when it truthfully describes the candidate's evidence
+- Prefer action + work + result bullets. If the source lacks a result, use truthful scope, method, complexity, or audience instead of fabricating impact
+- Keep bullets concise, specific, scannable, and free of first-person pronouns, keyword stuffing, and generic soft-skill claims
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Job Description:
@@ -308,6 +328,12 @@ Rules:
 - Improve custom section content the same way as standard sections
 - Copy the "years" field values EXACTLY as they appear in the original resume (including any month prefixes like "Jan 2020 - Present"). Do not shorten, reformat, or drop months.
 - Calculate and emphasize total relevant experience duration when it matches requirements
+- Build an implicit requirement-to-evidence map before editing: prioritize explicit must-haves, then preferred qualifications, and skip requirements with no resume evidence
+- Make the top third communicate fit quickly: a concise evidence-backed summary followed by the most relevant verified skills and accomplishments
+- For bullets, prefer action + project or task + result. Use existing metrics where available; otherwise add only supported scope, method, audience, or outcome
+- Reorder existing bullets or skills by relevance and impact, but preserve reverse chronology and never hide a role or alter dates
+- Use exact job terminology naturally and in context; do not stuff keywords, repeat them mechanically, or turn soft skills into unsupported self-ratings
+- Keep each bullet to one focused accomplishment, normally 1-2 lines, with active voice and no first-person pronouns
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Job Description:
@@ -351,7 +377,7 @@ DEFAULT_IMPROVE_PROMPT_ID = "keywords"
 # Backward-compatible alias
 IMPROVE_RESUME_PROMPT = IMPROVE_RESUME_PROMPT_FULL
 
-COVER_LETTER_PROMPT = """Write a brief cover letter for this job application.
+COVER_LETTER_PROMPT = """Write a tailored, evidence-based cover letter for this job application.
 
 IMPORTANT: Write in {output_language}.
 
@@ -362,15 +388,18 @@ Candidate Resume (JSON):
 {resume_data}
 
 Requirements:
-- 100-150 words maximum
-- 3-4 short paragraphs
-- Opening: Reference ONE specific thing from the job description (product, tech stack, or problem they're solving) - not generic excitement about "the role"
-- Middle: Pick 1-2 qualifications from resume that DIRECTLY match stated requirements, and reframe them in the job's language/terminology where the candidate's proven experience supports it (e.g., if the resume shows "built automated data pipelines" and the job says "ETL," describe that real work as ETL) - prioritize relevance over impressiveness
-- Closing: Simple availability to discuss, no desperate enthusiasm
+- 180-260 words, 3-4 short paragraphs, and comfortably under one page
+- Opening: Name the specific role and organization when available, then give a concrete, posting-grounded reason for interest. Do not invent company research or use generic excitement
+- Middle: Select the TWO highest-priority job needs that have strong resume evidence. For each, connect a specific candidate action or example to the employer's need and explain the likely contribution
+- Use the job's language/terminology where the candidate's proven experience supports it (e.g., if the resume shows "built automated data pipelines" and the job says "ETL," describe that real work as ETL)
+- Do not merely restate resume bullets or list skills. Add interpretation: why that evidence matters for this role
+- Include metrics only when present in the resume. If no metric exists, use truthful scope, method, complexity, or outcome
+- Closing: Briefly restate the contribution and invite a conversation; confident and courteous, never desperate
 - If resume shows career transition, frame the pivot as intentional and relevant
-- Extract company name from job description - do not use placeholders
+- Extract company and role from the job description. If either is absent, write naturally without placeholders or guessing
 - Do NOT invent information not in the resume
-- Tone: Confident peer, not eager applicant
+- Do not invent a hiring manager, referral, company initiative, product, value, or personal motivation that is not in the provided inputs
+- Tone: Specific, concise, active, and human. Preserve the candidate's likely voice; avoid clichés, flowery praise, generic soft-skill claims, and repeated sentence openings with "I"
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Output plain text only. No JSON, no markdown formatting."""
@@ -386,13 +415,15 @@ Candidate Resume (JSON):
 {resume_data}
 
 Guidelines:
-- 70-100 words maximum (shorter than a cover letter)
-- First sentence: Reference specific detail from job description (team, product, technical challenge) - never open with "I'm reaching out" or "I saw your posting"
-- One sentence on strongest matching qualification with a concrete metric if available
-- End with low-friction ask: "Worth a quick chat?" not "I'd love the opportunity to discuss"
-- Tone: How you'd message a former colleague, not a stranger
+- 60-90 words maximum (shorter than a cover letter)
+- Open with the genuine connection point available in the inputs: a shared context, the specific role, team, product, or problem. Never fabricate familiarity or a referral
+- Give one strong, evidence-backed reason the candidate may be relevant, using a concrete metric only when it exists in the resume
+- Make the message about learning or a useful conversation, not demanding a job or referral
+- End with one clear, low-friction ask, such as a 15-20 minute conversation or permission to send a concise question
+- Tone: Warm, direct, respectful of the recipient's time, and natural for a professional peer
 - Do NOT include placeholder brackets
-- Do NOT use phrases like "excited about" or "passionate about"
+- Do NOT use phrases like "excited about", "passionate about", "pick your brain", or generic flattery
+- Do NOT restate multiple resume bullets, over-explain the candidate's background, or attach unsupported claims to the recipient or company
 - Do NOT use em dash ("—") anywhere in the writing/output, even if it exists, remove it
 
 Output plain text only. No JSON, no markdown formatting."""
@@ -449,6 +480,10 @@ Content requirements:
 - skill_gaps: 3-5 preparation targets.
 - talking_points: 5-8 concise points.
 - Keep all suggested answer points factual and resume-grounded.
+- Rank role-fit observations by explicit must-have requirements, then preferred qualifications.
+- For each suggested answer, use a compact STAR structure where evidence permits: situation or task, the candidate's individual action, and the result. Do not invent missing STAR elements.
+- Questions should test the strongest claimed matches, ambiguous claims, likely technical depth, tradeoffs, ownership, and the highest-priority gaps.
+- Talking points must connect one verified resume fact to one job need; avoid generic strengths such as "hard-working" or "team player" without evidence.
 - Do NOT use markdown fences or commentary outside the JSON."""
 
 GENERATE_TITLE_PROMPT = """Extract the job title and company name from this job description.
@@ -484,11 +519,12 @@ Return ONLY a JSON object. Do not rewrite the resume.
 
 Rules:
 1. Prefer required and preferred JD skills.
-2. Include existing resume skills that are highly relevant to the JD.
-3. You may include JD skills that are missing from the resume skills list.
-4. Do not include skills unrelated to the JD.
-5. Do not include certifications.
-6. Generate reasons in {output_language}.
+2. Rank explicit must-haves first, then preferred qualifications, then responsibility-linked terms.
+3. Include existing resume skills that are highly relevant to the JD.
+4. You may include a JD skill missing from the skills list only when another part of the resume contains substantive evidence for it; explain that evidence in the reason.
+5. Do not include skills unrelated to the JD or terms drawn only from benefits or company boilerplate.
+6. Do not include certifications.
+7. Generate reasons in {output_language}.
 
 Existing resume skills:
 {existing_skills}
@@ -528,6 +564,13 @@ RULES:
 10. Exception to rule 2: you may add a skill only if it appears in the verified skill targets below
 11. By DEFAULT, scan the summary and every work, project, and education description for content that already demonstrates a job-description keyword or skill, and reframe that text using the job description's terminology where it is not already phrased that way (per rule 9, leave content that already aligns well), while preserving the candidate's actual accomplishment. Do NOT add new work, metrics, or responsibilities; only restate existing content in the JD's language, and verify every reframe stays factually accurate.
 12. Preserve original capitalization, especially for proper nouns, technical terms (e.g., REST, API, AWS), and acronyms. Do not change the casing of words that were capitalized in the original.
+13. Before proposing changes, build a requirement-to-evidence map internally. Prioritize explicit must-haves, then preferred qualifications. Skip any requirement without supporting resume evidence.
+14. Make the top third scannable: the summary should state the truthful target fit, strongest relevant capabilities, and best differentiator in 2-4 concise lines, without an objective statement or first-person pronouns.
+15. Improve bullets toward Action + Project/Task + Result. Use an existing metric when available; otherwise use only supported scope, method, complexity, audience, or qualitative outcome.
+16. Each bullet should communicate one accomplishment, stay concise (normally 1-2 lines), use active voice, and avoid "responsible for", "helped with", "worked on", generic self-ratings, and filler.
+17. Use exact JD phrases and acronym/full-term variants only where natural and evidence-backed. Never keyword-stuff or force a keyword into an unrelated bullet.
+18. Prefer high-signal changes: strongest verified match in the summary, then relevant experience or project evidence, then skills ordering. Do not edit for synonym variety alone.
+19. When reordering a list, preserve every original item. Within a job or project, place the most relevant and impactful bullets first; preserve reverse chronology across entries.
 
 PATHS you can target:
 - "summary" — the resume summary text
