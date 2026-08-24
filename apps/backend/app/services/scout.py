@@ -1047,12 +1047,12 @@ def _cover_letter_issues(
 
 
 async def _generate_verified_cover_letter(
-    resume_data: dict[str, Any], posting: dict[str, Any]
+    resume_data: dict[str, Any], posting: dict[str, Any], generation_guidance: str = ""
 ) -> tuple[str, list[str]]:
     last_issues: list[str] = []
     job_context = (
         f"Company: {posting['company']}\nRole: {posting['title']}\n\n"
-        f"{posting['description']}"
+        f"{posting['description']}{generation_guidance}"
     )
     for _attempt in range(2):
         letter = await generate_cover_letter(resume_data, job_context)
@@ -1150,6 +1150,125 @@ def _fact_is_safe(fact: dict[str, Any]) -> bool:
     return not fact.get("sensitive") and not bool(fact_terms & blocked_terms)
 
 
+def master_resume_candidate_facts(
+    resume_data: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build a safe, editable evidence library from a processed master resume.
+
+    Contact details are deliberately excluded. Imported facts are source-backed
+    snapshots, not new claims, and remain subject to the normal sensitive-fact
+    filter before they can be reused in an application pack.
+    """
+
+    facts: list[dict[str, Any]] = []
+
+    def add(key: str, label: str, value: str, category: str) -> None:
+        clean_value = value.strip()[:4000]
+        if clean_value:
+            facts.append(
+                {
+                    "fact_key": key,
+                    "label": label[:120],
+                    "value": clean_value,
+                    "category": category,
+                    "sensitive": False,
+                }
+            )
+
+    add(
+        "resume_summary",
+        "Professional summary",
+        str(resume_data.get("summary") or ""),
+        "positioning",
+    )
+
+    for index, item in enumerate(resume_data.get("education") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        institution = str(item.get("institution") or "Education").strip()
+        value = " | ".join(
+            str(item.get(field) or "").strip()
+            for field in ("degree", "years", "description")
+            if str(item.get(field) or "").strip()
+        )
+        add(f"resume_education_{index}", f"Education - {institution}", value, "education")
+
+    for index, item in enumerate(resume_data.get("workExperience") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "Experience").strip()
+        company = str(item.get("company") or "").strip()
+        heading = f"{title} at {company}" if company else title
+        details = item.get("description") or []
+        detail_text = details if isinstance(details, str) else "\n".join(map(str, details))
+        value = "\n".join(
+            part
+            for part in (str(item.get("years") or "").strip(), detail_text.strip())
+            if part
+        )
+        add(f"resume_experience_{index}", f"Experience - {heading}", value, "experience")
+
+    for index, item in enumerate(resume_data.get("personalProjects") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or f"Project {index}").strip()
+        details = item.get("description") or []
+        detail_text = details if isinstance(details, str) else "\n".join(map(str, details))
+        value = "\n".join(
+            part
+            for part in (
+                str(item.get("role") or "").strip(),
+                str(item.get("years") or "").strip(),
+                detail_text.strip(),
+            )
+            if part
+        )
+        add(f"resume_project_{index}", f"Project - {name}", value, "projects")
+
+    additional = resume_data.get("additional") or {}
+    if isinstance(additional, dict):
+        for key, label, category in (
+            ("technicalSkills", "Programming and technical skills", "skills"),
+            ("languages", "Languages", "languages"),
+            ("certificationsTraining", "Training and certifications", "credentials"),
+            ("awards", "Awards", "achievements"),
+        ):
+            values = additional.get(key) or []
+            value = values if isinstance(values, str) else ", ".join(map(str, values))
+            add(f"resume_{key.lower()}", label, value, category)
+
+    return facts
+
+
+def candidate_generation_guidance(facts: list[dict[str, Any]]) -> str:
+    """Return safe, preference-only guidance for application writing.
+
+    Evidence categories are intentionally excluded: the master resume remains
+    the factual source of truth. These entries may shape tone, emphasis, and
+    career direction but must never be treated as proof of a claim.
+    """
+
+    allowed_categories = {
+        "career_goals",
+        "writing_preferences",
+        "application_preferences",
+    }
+    lines = [
+        f"- {str(fact.get('label') or '').strip()}: {str(fact.get('value') or '').strip()}"
+        for fact in facts
+        if _fact_is_safe(fact)
+        and normalize_text(str(fact.get("category") or "")).replace(" ", "_")
+        in allowed_categories
+        and str(fact.get("value") or "").strip()
+    ]
+    if not lines:
+        return ""
+    return (
+        "\n\nCandidate-approved writing preferences (guidance only; not evidence for new "
+        "claims):\n" + "\n".join(lines)[:4000]
+    )
+
+
 async def prepare_pack(
     user_id: str, match_id: str, regeneration_key: str | None = None
 ) -> dict[str, Any]:
@@ -1167,6 +1286,9 @@ async def prepare_pack(
         raise ValueError(
             "A complete job description is required before preparing a pack."
         )
+
+    facts = await scout_repository.list_facts(user_id)
+    generation_guidance = candidate_generation_guidance(facts)
 
     generation_key = hashlib.sha256(
         f"pack-v2|{master['resume_id']}|{hashlib.sha256(master['content'].encode('utf-8')).hexdigest()}|{posting['description_hash']}|{regeneration_key or 'initial'}".encode()
@@ -1190,9 +1312,12 @@ async def prepare_pack(
         ) = await _tailor_verified_resume(master, posting)
         improved_text = json.dumps(improved, ensure_ascii=False)
         cover_letter, cover_warnings = await _generate_verified_cover_letter(
-            improved, posting
+            improved, posting, generation_guidance
         )
-        job_context = f"Company: {posting['company']}\nRole: {posting['title']}\n\n{posting['description']}"
+        job_context = (
+            f"Company: {posting['company']}\nRole: {posting['title']}\n\n"
+            f"{posting['description']}{generation_guidance}"
+        )
         outreach = await generate_outreach_message(improved, job_context)
         interview = await generate_interview_prep(improved, job_context)
         job = await db.create_job(
@@ -1226,7 +1351,6 @@ async def prepare_pack(
         referrals = await rank_referrals(user_id, match)
         contact = referrals[0]["contact"] if referrals else None
         subject, referral_email, linkedin = referral_copy(contact, posting, improved)
-        facts = await scout_repository.list_facts(user_id)
         safe_answers = {
             fact["label"]: fact["value"] for fact in facts if _fact_is_safe(fact)
         }

@@ -3,6 +3,7 @@
 import pytest
 
 from app.services.scout import (
+    candidate_generation_guidance,
     _fact_is_safe,
     _score_alternatives,
     _cover_letter_issues,
@@ -10,6 +11,7 @@ from app.services.scout import (
     canonical_key,
     content_embedding,
     email_alert_posting,
+    master_resume_candidate_facts,
     referral_copy,
 )
 
@@ -137,6 +139,52 @@ def test_candidate_fact_sensitive_categories_are_never_auto_answered(
         )
         is expected
     )
+
+
+def test_master_resume_import_builds_evidence_without_contact_details(sample_resume):
+    facts = master_resume_candidate_facts(sample_resume)
+    by_key = {fact["fact_key"]: fact for fact in facts}
+
+    assert by_key["resume_education_1"]["category"] == "education"
+    assert "MIT" in by_key["resume_education_1"]["label"]
+    assert by_key["resume_project_1"]["category"] == "projects"
+    assert "Python" in by_key["resume_technicalskills"]["value"]
+    serialized = str(facts)
+    assert "jane@example.com" not in serialized
+    assert "+1-555-0100" not in serialized
+
+
+def test_candidate_generation_guidance_uses_preferences_not_evidence():
+    guidance = candidate_generation_guidance(
+        [
+            {
+                "fact_key": "voice",
+                "label": "Writing voice",
+                "value": "Concise and technical",
+                "category": "writing_preferences",
+                "sensitive": False,
+            },
+            {
+                "fact_key": "resume_project_1",
+                "label": "Project",
+                "value": "Built a system",
+                "category": "projects",
+                "sensitive": False,
+            },
+            {
+                "fact_key": "pronouns",
+                "label": "Pronouns",
+                "value": "withheld",
+                "category": "writing_preferences",
+                "sensitive": True,
+            },
+        ]
+    )
+
+    assert "Concise and technical" in guidance
+    assert "Built a system" not in guidance
+    assert "withheld" not in guidance
+    assert "not evidence" in guidance
 
 
 def test_cover_letter_verifier_rejects_wrong_target_and_invented_metrics(sample_resume):

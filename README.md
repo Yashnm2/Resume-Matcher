@@ -137,6 +137,17 @@ You can follow me on:
 
 ![Job Description Input](assets/step_2.png)
 
+### Personal Internship Profile
+
+Use `/candidate-facts` as a private source of truth for internship applications. Set target and
+adjacent roles, locations, industries, experience limits, workplace preferences, and target
+skills. The profile can import education, experience, projects, skills, awards, and credentials
+from the processed master resume while deliberately excluding contact details.
+
+Approved writing preferences shape cover letters, outreach, and interview preparation but are
+never treated as evidence for a new claim. Imported facts stay editable and removable, while
+sensitive screening categories remain withheld from automatic answers.
+
 ### Daily 20 Job Scout
 
 Run Resume Matcher as a private, headless application-pack service. It discovers

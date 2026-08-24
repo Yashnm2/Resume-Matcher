@@ -1,9 +1,31 @@
-import { apiFetch, apiPatch, apiPost } from './client';
+import { apiDelete, apiFetch, apiPatch, apiPost } from './client';
+
+export interface SearchProfileConfig {
+  desired_titles?: string[];
+  adjacent_titles?: string[];
+  locations?: string[];
+  workplace_types?: Array<'remote' | 'hybrid' | 'onsite'>;
+  seniority?: string[];
+  minimum_years_experience?: number | null;
+  maximum_years_experience?: number | null;
+  required_skills?: string[];
+  preferred_skills?: string[];
+  excluded_terms?: string[];
+  preferred_companies?: string[];
+  industries?: string[];
+  employment_types?: string[];
+  daily_pack_limit: number;
+  reserve_limit?: number;
+  minimum_match_score: number;
+  max_per_company?: number;
+  timezone?: string;
+  [key: string]: unknown;
+}
 
 export interface SearchProfile {
   profile_id: string;
   name: string;
-  config: { daily_pack_limit: number; minimum_match_score: number; [key: string]: unknown };
+  config: SearchProfileConfig;
   is_active: boolean;
 }
 
@@ -153,6 +175,12 @@ export const listContacts = () => apiFetch('/contacts').then(json<Contact[]>);
 export const listCandidateFacts = () => apiFetch('/candidate-facts').then(json<CandidateFact[]>);
 export const saveCandidateFact = (payload: Record<string, unknown>) =>
   apiPost('/candidate-facts', payload).then(json<CandidateFact>);
+export const importMasterResumeFacts = () =>
+  apiPost('/candidate-facts/import-master', {}).then(
+    json<{ imported: number; facts: CandidateFact[] }>
+  );
+export const deleteCandidateFact = (id: string) =>
+  apiDelete(`/candidate-facts/${id}`).then(json<{ message: string }>);
 export const listReferrals = (id: string, refresh = false) =>
   apiFetch(`/opportunities/${id}/referrals?refresh=${refresh}`).then(json<ReferralMatch[]>);
 export const updateReferral = (

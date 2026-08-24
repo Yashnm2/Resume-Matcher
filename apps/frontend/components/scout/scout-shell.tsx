@@ -9,7 +9,7 @@ const links = [
   ['Application Tracker', '/tracker'],
   ['Contacts', '/contacts'],
   ['Sources', '/sources'],
-  ['Candidate facts', '/candidate-facts'],
+  ['My internship profile', '/candidate-facts'],
   ['Settings', '/settings'],
 ] as const;
 

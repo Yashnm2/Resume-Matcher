@@ -208,6 +208,7 @@ async def isolated_db(tmp_path, monkeypatch):
         "health",
         "applications",
         "resume_wizard",
+        "scout",
     ):
         try:
             module = importlib.import_module(f"app.routers.{router_name}")
@@ -215,6 +216,8 @@ async def isolated_db(tmp_path, monkeypatch):
             continue
         if hasattr(module, "db"):
             monkeypatch.setattr(module, "db", test_db)
+    scout_repository_module = importlib.import_module("app.scout_repository")
+    monkeypatch.setattr(scout_repository_module, "db", test_db)
     try:
         yield test_db
     finally:

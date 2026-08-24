@@ -19,6 +19,7 @@ from app.schemas.scout import (
     ArtifactPackResponse,
     ArtifactPackUpdate,
     CandidateFactCreate,
+    CandidateFactImportResponse,
     CandidateFactResponse,
     ContactImportResponse,
     ContactResponse,
@@ -40,6 +41,7 @@ from app.services.scout import (
     _fact_is_safe,
     ingest_and_score,
     import_linkedin_contacts,
+    master_resume_candidate_facts,
     manual_posting,
     prepare_pack,
     rank_referrals,
@@ -499,6 +501,42 @@ async def list_candidate_facts(
         CandidateFactResponse.model_validate(row)
         for row in await scout_repository.list_facts(user.user_id)
     ]
+
+
+@router.post(
+    "/candidate-facts/import-master", response_model=CandidateFactImportResponse
+)
+async def import_master_resume_facts(
+    user: CurrentUser = Depends(get_current_user),
+) -> CandidateFactImportResponse:
+    """Import non-contact evidence from the current processed master resume."""
+    master = await db.get_master_resume(user.user_id)
+    if not master or not master.get("processed_data"):
+        raise HTTPException(
+            status_code=400,
+            detail="Create or upload a processed master resume before importing evidence.",
+        )
+
+    imported = []
+    for fact in master_resume_candidate_facts(master["processed_data"]):
+        if not _fact_is_safe(fact):
+            fact["sensitive"] = True
+        imported.append(await scout_repository.upsert_fact(user.user_id, fact))
+
+    return CandidateFactImportResponse(
+        imported=len(imported),
+        facts=[CandidateFactResponse.model_validate(row) for row in imported],
+    )
+
+
+@router.delete("/candidate-facts/{fact_id}")
+async def delete_candidate_fact(
+    fact_id: str, user: CurrentUser = Depends(get_current_user)
+) -> dict[str, str]:
+    """Delete one user-owned profile fact."""
+    if not await scout_repository.delete_fact(user.user_id, fact_id):
+        raise HTTPException(status_code=404, detail="Candidate fact not found")
+    return {"message": "Candidate fact deleted successfully"}
 
 
 @router.get("/events")

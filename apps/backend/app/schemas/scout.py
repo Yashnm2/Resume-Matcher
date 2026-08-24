@@ -210,6 +210,11 @@ class CandidateFactResponse(CandidateFactCreate):
     updated_at: str
 
 
+class CandidateFactImportResponse(BaseModel):
+    imported: int
+    facts: list[CandidateFactResponse]
+
+
 class ScoutRunResponse(BaseModel):
     run_id: str
     source_id: str

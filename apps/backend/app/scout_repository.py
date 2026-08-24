@@ -725,6 +725,18 @@ class ScoutRepository:
             )
             return [row_dict(row) for row in result.scalars().all()]
 
+    async def delete_fact(self, user_id: str, fact_id: str) -> bool:
+        """Delete one user-owned candidate fact."""
+        async with db.session_factory() as session:
+            result = await session.execute(
+                delete(CandidateFact).where(
+                    CandidateFact.user_id == user_id,
+                    CandidateFact.fact_id == fact_id,
+                )
+            )
+            await session.commit()
+            return bool(result.rowcount)
+
     async def audit(
         self,
         user_id: str,
